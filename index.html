@@ -13,31 +13,15 @@
       background: #f8f8f8;
       border-bottom: 1px solid #ccc;
     }
-    input[type="text"] {
-      width: 400px;
-      padding: 5px;
-    }
+    input[type="text"] { width: 400px; padding: 5px; }
     input[type="color"] {
-      margin-left: 10px;
-      padding: 0;
-      border: none;
-      width: 40px;
-      height: 30px;
-      cursor: pointer;
+      margin-left: 10px; padding: 0; border: none; width: 40px; height: 30px; cursor: pointer;
     }
-    button {
-      padding: 5px 10px;
-      margin-left: 5px;
-    }
+    button { padding: 5px 10px; margin-left: 5px; }
     #version {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-size: 12px;
-      border: 1px solid #ccc;
+      position: absolute; top: 10px; right: 10px;
+      background: rgba(255,255,255,0.9); padding: 5px 10px;
+      border-radius: 5px; font-size: 12px; border: 1px solid #ccc;
     }
   </style>
 </head>
@@ -50,64 +34,77 @@
     <button onclick="drawOutline()">Draw Outline</button>
   </div>
   <div id="map"></div>
-  <div id="version">Version: v2.0</div>
+  <div id="version">Version: v2.1</div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/martinez-polygon-clipping/dist/martinez.min.js"></script>
   <script>
-    // Base layers
-    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' });
-    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles © Esri' });
-    const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO' });
-    const light = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap &copy; CARTO' });
-    const terrain = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { maxZoom: 17, attribution: 'Map data: &copy; OpenStreetMap contributors, SRTM | Style: © OpenTopoMap' });
-    const blank = L.tileLayer('', { attribution: '' });
+    let map = L.map('map', { center: [10.2, 76.4], zoom: 8 });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-    let map = L.map('map', { center: [10.2, 76.4], zoom: 8, layers: [osm] });
-    L.control.layers({ "OSM": osm, "Satellite": satellite, "Dark": dark, "Light": light, "Terrain": terrain, "No Map": blank }).addTo(map);
-
-    let geojsonData;
-    let geojsonLayer;
-    let outlineLayer;
-
-    // Default IDs to show polygons
+    let geojsonData, geojsonLayer, outlineLayer;
     const defaultIDs = ["Q13112599","Q13113111","Q13113059","Q13110970","Q13110239","Q13111922","Q6958393","Q16909824"];
     document.getElementById('idInput').value = defaultIDs.join(',');
 
-    // Load polygons
+    // Load GeoJSON
     fetch('local_bodies.geojson')
       .then(res => res.json())
       .then(data => {
         geojsonData = data;
-        drawSelected(); // Draw polygons on load
+        drawSelected();
       });
 
-    // Draw polygons only
     function drawSelected() {
       const ids = document.getElementById('idInput').value.split(',').map(s => s.trim());
       const color = document.getElementById('colorPicker').value;
 
       if (geojsonLayer) map.removeLayer(geojsonLayer);
-      if (outlineLayer) map.removeLayer(outlineLayer); // Remove previous outline
+      if (outlineLayer) map.removeLayer(outlineLayer);
 
       geojsonLayer = L.geoJSON(geojsonData, {
         filter: feature => ids.includes(feature.properties.wikidata),
-        style: { color: color, weight: 2, fillOpacity: 0 }
+        style: { color: color, weight: 2, fillOpacity: 0.1 }
       }).addTo(map);
 
       if (geojsonLayer.getBounds().isValid()) map.fitBounds(geojsonLayer.getBounds());
     }
 
-    // Draw outer boundary from precomputed GeoJSON
     function drawOutline() {
+      if (!geojsonLayer) return;
       const outlineColor = document.getElementById('outlineColorPicker').value;
+
       if (outlineLayer) map.removeLayer(outlineLayer);
 
-      fetch('outer_boundary.geojson') // precomputed outer boundary
-        .then(res => res.json())
-        .then(data => {
-          outlineLayer = L.geoJSON(data, { style: { color: outlineColor, weight: 3, fillOpacity: 0 } }).addTo(map);
-          if (outlineLayer.getBounds().isValid()) map.fitBounds(outlineLayer.getBounds());
-        });
+      // Collect selected polygons coordinates
+      const polygons = [];
+      geojsonLayer.eachLayer(layer => {
+        const geom = layer.feature.geometry;
+        if (geom.type === "Polygon") polygons.push([geom.coordinates]);
+        if (geom.type === "MultiPolygon") polygons.push(geom.coordinates);
+      });
+
+      if (polygons.length === 0) return;
+
+      // Merge polygons using martinez
+      let merged = polygons[0];
+      for (let i = 1; i < polygons.length; i++) {
+        merged = martinez.union(merged, polygons[i]);
+      }
+
+      // Convert merged coordinates to GeoJSON polygon(s)
+      const mergedFeatures = merged.map(polyCoords => ({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: polyCoords },
+        properties: {}
+      }));
+
+      outlineLayer = L.geoJSON({ type: "FeatureCollection", features: mergedFeatures }, {
+        style: { color: outlineColor, weight: 3, fillOpacity: 0 }
+      }).addTo(map);
+
+      if (outlineLayer.getBounds().isValid()) map.fitBounds(outlineLayer.getBounds());
     }
   </script>
 </body>
