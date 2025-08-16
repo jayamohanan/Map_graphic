@@ -19,55 +19,45 @@
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <!-- Turf.js for geometry ops -->
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
   <script>
-    // Example: specify local bodies belonging to one assembly
-    // (replace with actual IDs or names from your GeoJSON properties)
+    // Local bodies in one assembly (replace with real names/IDs from your GeoJSON properties)
     const assemblyLocalBodies = [
       "Manjalloor",
-      "Velloor",
-      "Piravom"
+      "SomeOtherPanchayat"
     ];
 
     // Initialize map
-    const map = L.map('map').setView([10.0, 76.5], 9);
+    const map = L.map('map').setView([10, 76], 9); // Kerala center approx
 
-    // ESRI Satellite basemap
-    L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      {
-        attribution: 'Tiles © Esri'
-      }
-    ).addTo(map);
+    // Add basemap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-    // Load local_bodies GeoJSON
+    // Load GeoJSON
     fetch("local_bodies.geojson")
       .then(res => res.json())
       .then(data => {
-        // Filter features to only include those in the assembly list
         const filtered = {
           type: "FeatureCollection",
           features: data.features.filter(f => 
-            assemblyLocalBodies.includes(f.properties.NAME) // adjust "NAME" to your property key
+            assemblyLocalBodies.includes(f.properties.NAME) // <-- adjust property name
           )
         };
 
-        // Draw filtered features
-        const layer = L.geoJSON(filtered, {
+        const geoLayer = L.geoJSON(filtered, {
           style: {
-            color: "yellow",
+            color: "blue",
             weight: 2,
-            fillOpacity: 0.1
+            fillOpacity: 0.2
           },
           onEachFeature: (feature, layer) => {
-            layer.bindPopup(feature.properties.NAME);
+            layer.bindPopup(feature.properties.NAME); // adjust to correct field
           }
         }).addTo(map);
 
-        // Zoom to the assembly
-        map.fitBounds(layer.getBounds());
+        map.fitBounds(geoLayer.getBounds());
       });
   </script>
 </body>
