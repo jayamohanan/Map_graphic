@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Assembly Map Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <!-- Turf.js for geometry ops -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+  <script>
+    // Example: specify local bodies belonging to one assembly
+    // (replace with actual IDs or names from your GeoJSON properties)
+    const assemblyLocalBodies = [
+      "Manjalloor",
+      "Velloor",
+      "Piravom"
+    ];
+
+    // Initialize map
+    const map = L.map('map').setView([10.0, 76.5], 9);
+
+    // ESRI Satellite basemap
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      {
+        attribution: 'Tiles © Esri'
+      }
+    ).addTo(map);
+
+    // Load local_bodies GeoJSON
+    fetch("local_bodies.geojson")
+      .then(res => res.json())
+      .then(data => {
+        // Filter features to only include those in the assembly list
+        const filtered = {
+          type: "FeatureCollection",
+          features: data.features.filter(f => 
+            assemblyLocalBodies.includes(f.properties.NAME) // adjust "NAME" to your property key
+          )
+        };
+
+        // Draw filtered features
+        const layer = L.geoJSON(filtered, {
+          style: {
+            color: "yellow",
+            weight: 2,
+            fillOpacity: 0.1
+          },
+          onEachFeature: (feature, layer) => {
+            layer.bindPopup(feature.properties.NAME);
+          }
+        }).addTo(map);
+
+        // Zoom to the assembly
+        map.fitBounds(layer.getBounds());
+      });
+  </script>
+</body>
+</html>
