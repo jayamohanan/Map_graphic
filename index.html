@@ -43,7 +43,7 @@
     <button onclick="drawOutline()">Draw Outline</button>
   </div>
   <div id="map"></div>
-  <div id="version">Version: v2.2</div>
+  <div id="version">Version: v2.3</div>
   <div id="status" style="display: none;"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -157,17 +157,27 @@
 
         // Handle the merged result (could be single polygon or multiple)
         const mergedFeatures = [];
-        if (Array.isArray(merged[0][0])) {
+        
+        // Check if we have a valid polygon structure
+        function isValidPolygon(coords) {
+          return Array.isArray(coords) && 
+                 coords.length > 0 && 
+                 Array.isArray(coords[0]) && 
+                 Array.isArray(coords[0][0]) && 
+                 coords[0][0].length >= 2;
+        }
+
+        if (isValidPolygon(merged)) {
           // Single polygon case
           mergedFeatures.push({
             type: "Feature",
             geometry: { type: "Polygon", coordinates: merged },
             properties: {}
           });
-        } else {
+        } else if (Array.isArray(merged)) {
           // Multi-polygon case
           merged.forEach(poly => {
-            if (poly && poly[0]) {
+            if (isValidPolygon(poly)) {
               mergedFeatures.push({
                 type: "Feature",
                 geometry: { type: "Polygon", coordinates: poly },
@@ -178,10 +188,11 @@
         }
 
         if (mergedFeatures.length === 0) {
-          showStatus('Could not create outline from selected polygons', 'error');
+          showStatus('Could not create valid outline from selected polygons', 'error');
           return;
         }
 
+        // Create the outline layer
         outlineLayer = L.geoJSON({ type: "FeatureCollection", features: mergedFeatures }, {
           style: { 
             color: outlineColor, 
@@ -194,6 +205,8 @@
         if (outlineLayer.getBounds().isValid()) {
           map.fitBounds(outlineLayer.getBounds());
           showStatus('Outline created successfully');
+        } else {
+          showStatus('Outline created but with invalid bounds', 'warning');
         }
       } catch (err) {
         showStatus('Error creating outline: ' + err.message, 'error');
