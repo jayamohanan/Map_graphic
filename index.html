@@ -49,7 +49,7 @@
     <button onclick="drawOutline()">Draw Outline</button>
   </div>
   <div id="map"></div>
-  <div id="version">Version: v1.5</div>
+  <div id="version">Version: v1.6</div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
@@ -72,7 +72,7 @@
       .then(res => res.json())
       .then(data => { geojsonData = data; });
 
-    // Draw selected individual local bodies
+    // Draw individual local bodies
     function drawSelected() {
       const ids = document.getElementById('idInput').value.split(',').map(s => s.trim());
       const color = document.getElementById('colorPicker').value;
@@ -86,7 +86,7 @@
       if (geojsonLayer.getBounds().isValid()) map.fitBounds(geojsonLayer.getBounds());
     }
 
-    // Draw merged outer boundary of selected local bodies
+    // Draw merged outer boundary of selected local bodies (convex hull)
     function drawOutline() {
       const ids = document.getElementById('idInput').value.split(',').map(s => s.trim());
       const color = document.getElementById('colorPicker').value;
@@ -95,29 +95,22 @@
       const selectedFeatures = geojsonData.features.filter(f => ids.includes(f.properties.wikidata));
       if (!selectedFeatures.length) return;
 
-      // Flatten MultiPolygons into individual Polygons
-      let polygons = [];
-      selectedFeatures.forEach(f => {
-        if (f.geometry.type === "MultiPolygon") {
-          f.geometry.coordinates.forEach(coords => polygons.push(turf.polygon(coords)));
-        } else if (f.geometry.type === "Polygon") {
-          polygons.push(f);
-        }
+      // Flatten MultiPolygons
+      const flattened = turf.flatten({ type: "FeatureCollection", features: selectedFeatures });
+
+      // Collect all coordinates
+      let allCoords = [];
+      flattened.features.forEach(f => {
+        f.geometry.coordinates[0].forEach(c => allCoords.push(c));
       });
 
-      if (!polygons.length) return;
+      if (!allCoords.length) return;
 
-      // Merge all polygons safely
-      let merged = polygons[0];
-      for (let i = 1; i < polygons.length; i++) {
-        try {
-          merged = turf.union(merged, polygons[i]);
-        } catch (e) {
-          console.warn("Failed to union a polygon:", e);
-        }
-      }
+      // Create convex hull around all points
+      const hull = turf.convex(turf.multiPoint(allCoords));
+      if (!hull) return;
 
-      geojsonLayer = L.geoJSON(merged, { style: { color: color, weight: 3, fillOpacity: 0 } }).addTo(map);
+      geojsonLayer = L.geoJSON(hull, { style: { color: color, weight: 3, fillOpacity: 0 } }).addTo(map);
       if (geojsonLayer.getBounds().isValid()) map.fitBounds(geojsonLayer.getBounds());
     }
   </script>
