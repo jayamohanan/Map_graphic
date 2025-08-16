@@ -44,15 +44,15 @@
 <body>
   <div id="controls">
     <input type="text" id="idInput" placeholder="Enter Wikidata IDs (comma separated)" />
-    <input type="color" id="colorPicker" value="#0000ff" title="Pick boundary color" />
+    <input type="color" id="colorPicker" value="#0000ff" title="Pick polygon color" />
+    <input type="color" id="outlineColorPicker" value="#ff0000" title="Pick outline color" />
     <button onclick="drawSelected()">Draw</button>
     <button onclick="drawOutline()">Draw Outline</button>
   </div>
   <div id="map"></div>
-  <div id="version">Version: v1.9</div>
+  <div id="version">Version: v2.0</div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/@turf/turf/turf.min.js"></script>
   <script>
     // Base layers
     const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' });
@@ -69,21 +69,23 @@
     let geojsonLayer;
     let outlineLayer;
 
-    // Default IDs to show polygons on load
+    // Default IDs to show polygons
     const defaultIDs = ["Q13112599","Q13113111","Q13113059","Q13110970","Q13110239","Q13111922","Q6958393","Q16909824"];
+    document.getElementById('idInput').value = defaultIDs.join(',');
 
+    // Load polygons
     fetch('local_bodies.geojson')
       .then(res => res.json())
       .then(data => {
         geojsonData = data;
-        document.getElementById('idInput').value = defaultIDs.join(',');
-        drawSelected(); // Draw polygons only by default
+        drawSelected(); // Draw polygons on load
       });
 
-    // Draw individual local bodies
+    // Draw polygons only
     function drawSelected() {
       const ids = document.getElementById('idInput').value.split(',').map(s => s.trim());
       const color = document.getElementById('colorPicker').value;
+
       if (geojsonLayer) map.removeLayer(geojsonLayer);
       if (outlineLayer) map.removeLayer(outlineLayer); // Remove previous outline
 
@@ -95,29 +97,17 @@
       if (geojsonLayer.getBounds().isValid()) map.fitBounds(geojsonLayer.getBounds());
     }
 
-    // Draw outer boundary along the exact edges without hiding polygons
+    // Draw outer boundary from precomputed GeoJSON
     function drawOutline() {
-      if (!geojsonLayer) return;
+      const outlineColor = document.getElementById('outlineColorPicker').value;
       if (outlineLayer) map.removeLayer(outlineLayer);
 
-      const lines = [];
-      geojsonLayer.eachLayer(layer => {
-        const poly = layer.feature;
-        lines.push(turf.polygonToLine(poly));
-      });
-
-      let mergedLine = lines[0];
-      for (let i = 1; i < lines.length; i++) {
-        try {
-          mergedLine = turf.union(mergedLine, lines[i]);
-        } catch (e) {
-          console.warn("Failed to merge line:", e);
-        }
-      }
-
-      if (!mergedLine) return;
-
-      outlineLayer = L.geoJSON(mergedLine, { style: { color: '#ff0000', weight: 3, fillOpacity: 0 } }).addTo(map);
+      fetch('outer_boundary.geojson') // precomputed outer boundary
+        .then(res => res.json())
+        .then(data => {
+          outlineLayer = L.geoJSON(data, { style: { color: outlineColor, weight: 3, fillOpacity: 0 } }).addTo(map);
+          if (outlineLayer.getBounds().isValid()) map.fitBounds(outlineLayer.getBounds());
+        });
     }
   </script>
 </body>
