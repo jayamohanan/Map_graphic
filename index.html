@@ -42,39 +42,32 @@
       <button id="drawASM">Draw Assembly</button>
       <button id="clearAll">Clear All</button>
     </div>
-    <small class="hint">Assemblies are read from <code>assembly12_V3.geojson</code>. Matching tries common keys: <code>wikidata, ac_id, id, code, ac_name</code> (case-insensitive). Names match loosely.</small>
+    <small class="hint">Assemblies are read from <code>assembly12_V3.geojson</code>. Matching tries common keys: <code>wikidata, ac_id, id, code, ac_name, name, Name</code> (case-insensitive). Names match loosely.</small>
   </div>
   
   <div id="map"></div>
-  <div id="version">Version: v2.4</div>
+  <div id="version">Version: v2.5</div>
   <div id="status"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/martinez-polygon-clipping/dist/martinez.min.js"></script>
 
   <script>
-    // --- Map setup ---
     const map = L.map('map', { center: [10.2, 76.4], zoom: 8 });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
 
-    // --- Data URLs ---
-    // NOTE: Browsers can't load .gpkg directly without extra libraries. Export these to GeoJSON
-    // with the same base name (e.g., assembly12_V3.geojson) and place alongside this file.
     const URLS = {
       localBodies: 'local_bodies.geojson',
-      assembly: 'assembly12_V3.geojson', // ← export from assembly12_V3.gpkg
-      // district: 'district12_V3.geojson', // optional / future
+      assembly: 'assembly12_V3.geojson',
     };
 
-    // --- Layers ---
     let geojsonDataLB = null;
     let geojsonDataASM = null;
 
-    let layerLB = null;          // Local Bodies layer
-    let layerLBOutline = null;   // Union outline of local bodies
-    let layerASM = null;         // Assembly layer
+    let layerLB = null;
+    let layerLBOutline = null;
+    let layerASM = null;
 
-    // --- UI elements ---
     const idInput = document.getElementById('idInput');
     const colorPicker = document.getElementById('colorPicker');
     const outlineColorPicker = document.getElementById('outlineColorPicker');
@@ -84,7 +77,6 @@
     const defaultIDs = ["Q13112599","Q13113111","Q13113059","Q13110970","Q13110239","Q13111922","Q6958393","Q16909824"];
     idInput.value = defaultIDs.join(',');
 
-    // --- Helpers ---
     function showStatus(message, type = 'info', timeout = 3000) {
       const el = document.getElementById('status');
       el.textContent = message;
@@ -99,7 +91,7 @@
         if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
         return await res.json();
       } catch (err) {
-        showStatus(`Error loading ${label}: ${err.message}. If you're pointing at a .gpkg, please export it to GeoJSON first.`, 'error', 6000);
+        showStatus(`Error loading ${label}: ${err.message}`, 'error', 6000);
         return null;
       }
     }
@@ -128,11 +120,10 @@
 
     function removeIf(layer) { if (layer) { map.removeLayer(layer); } }
 
-    // --- Draw Local Bodies ---
     function drawSelected() {
       const ids = parseCSV(idInput.value);
       const color = colorPicker.value;
-      const lbWeight = 2; // base thickness for local bodies
+      const lbWeight = 2;
 
       removeIf(layerLB);
       removeIf(layerLBOutline);
@@ -147,14 +138,12 @@
         fitIfValid(layerLB);
         showStatus(`Displayed ${features.length} local bodies.`);
 
-        // If Assembly already drawn, refresh its style to keep +20% rule
         if (layerASM) applyAssemblyThickness(lbWeight);
       } catch (err) {
         showStatus('Error drawing local bodies: ' + err.message, 'error');
       }
     }
 
-    // --- Union outline for local bodies ---
     function drawOutline() {
       if (!layerLB) { showStatus('Please draw local bodies first', 'error'); return; }
 
@@ -190,15 +179,14 @@
       }
     }
 
-    // --- Draw Assembly (20% thicker than Local Body boundary) ---
     function applyAssemblyThickness(lbWeightBase = 2) {
       if (!layerASM) return;
-      const asmWeight = +(lbWeightBase * 1.2).toFixed(2); // +20%
+      const asmWeight = +(lbWeightBase * 1.2).toFixed(2);
       layerASM.setStyle({ weight: asmWeight });
     }
 
     function drawAssembly() {
-      const keys = ['wikidata','WIKIDATA','ac_id','AC_ID','id','ID','code','CODE','ac_name','AC_NAME','name','NAME'];
+      const keys = ['wikidata','WIKIDATA','ac_id','AC_ID','id','ID','code','CODE','ac_name','AC_NAME','name','NAME','Name'];
       const tokens = parseCSV(asmInput.value).map(s => s.toLowerCase());
       const color = asmColorPicker.value;
 
@@ -208,14 +196,12 @@
       if (!tokens.length) { showStatus('Enter Assembly IDs or names', 'warning'); return; }
 
       try {
-        // Fuzzy match: exact match first; if none, contains()
         let feats = getMatchingFeatures(geojsonDataASM, tokens, keys);
         if (!feats.length) {
           feats = geojsonDataASM.features.filter(f => keys.some(k => f.properties?.[k] && tokens.some(t => String(f.properties[k]).toLowerCase().includes(t))));
         }
         if (!feats.length) { showStatus('No assemblies matched the given IDs/names', 'warning'); return; }
 
-        // Base LB weight if present; else assume 2
         const lbWeight = layerLB ? layerLB.options?.style?.weight || 2 : 2;
         const asmWeight = +(lbWeight * 1.2).toFixed(2);
 
@@ -233,7 +219,6 @@
       showStatus('Cleared all layers');
     }
 
-    // --- Load data then wire UI ---
     Promise.all([
       loadGeoJSON(URLS.localBodies, 'Local Bodies'),
       loadGeoJSON(URLS.assembly, 'Assembly')
