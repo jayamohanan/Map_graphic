@@ -1,139 +1,60 @@
+<!-- 
+README:
+========
+This file uses a versioning system in the <title> and <h1> tags to track updates.
+
+Guidelines:
+1. Each time you make any change to this file, increment the version number.
+   Example: v2.4 → v2.5 → v2.6, etc.
+Current Version: v2.5
+-->
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Kerala Local Bodies Map</title>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <meta charset="UTF-8">
+  <title>Local Body Map v2.5</title>
   <style>
-    body { margin: 0; padding: 0; }
-    #map { width: 100%; height: 95vh; }
-    #controls { padding: 10px; background: #f8f8f8; border-bottom: 1px solid #ccc; }
-    input[type="text"] { width: 400px; padding: 5px; }
-    input[type="color"] { margin-left: 10px; padding: 0; border: none; width: 40px; height: 30px; cursor: pointer; }
-    button { padding: 5px 10px; margin-left: 5px; }
-    #version { 
-      position: absolute; top: 10px; right: 10px;
-      background: rgba(255,255,255,0.9); padding: 5px 10px;
-      border-radius: 5px; font-size: 12px; border: 1px solid #ccc;
-    }
-    #status {
-      padding: 5px 10px;
-      background: rgba(255,255,255,0.9);
-      border-radius: 5px;
-      position: absolute;
-      bottom: 20px;
-      left: 20px;
-      z-index: 1000;
-    }
+    #map { height: 90vh; width: 100%; }
   </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet-geojson-vt@3.0.0/leaflet-geojson-vt.min.js"></script>
 </head>
 <body>
-  <div id="controls">
-    <input type="text" id="idInput" placeholder="Enter Wikidata IDs (comma separated)" />
-    <input type="color" id="colorPicker" value="#0000ff" title="Pick polygon color" />
-    <input type="color" id="outlineColorPicker" value="#ff0000" title="Pick outline color" />
-    <button onclick="drawSelected()">Draw</button>
-    <button onclick="drawOutline()">Draw Outline</button>
-  </div>
+  <h1>Local Body Map v2.5</h1>
   <div id="map"></div>
-  <div id="version">Version: v2.3</div>
-  <div id="status" style="display: none;"></div>
-
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/martinez-polygon-clipping/dist/martinez.min.js"></script>
   <script>
-    let map = L.map('map', { center: [10.2, 76.4], zoom: 8 });
+    // Initialize the map
+    const map = L.map('map').setView([11.25, 75.78], 10);
+
+    // Add base layer
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    let geojsonData, geojsonLayer, outlineLayer;
-    const defaultIDs = ["Q13112599","Q13113111","Q13113059","Q13110970","Q13110239","Q13111922","Q6958393","Q16909824"];
-    document.getElementById('idInput').value = defaultIDs.join(',');
+    // Example function to fetch and render boundaries from Wikidata QIDs
+    async function loadLocalBody(qid) {
+      const url = `https://query.wikidata.org/sparql?format=json&query=
+        SELECT ?geo WHERE {
+          wd:${qid} wdt:P3896 ?geo .
+        }`;
 
-    // Load GeoJSON
-    fetch('local_bodies.geojson')
-      .then(res => res.json())
-      .then(data => {
-        geojsonData = data;
-        drawSelected();
-      })
-      .catch(err => {
-        showStatus('Error loading GeoJSON: ' + err.message, 'error');
-      });
-
-    function showStatus(message, type = 'info') {
-      const statusEl = document.getElementById('status');
-      statusEl.textContent = message;
-      statusEl.style.display = 'block';
-      statusEl.style.backgroundColor = type === 'error' ? 'rgba(255,200,200,0.9)' : 'rgba(255,255,255,0.9)';
-      setTimeout(() => statusEl.style.display = 'none', 3000);
-    }
-
-    function drawSelected() {
-      const ids = document.getElementById('idInput').value.split(',').map(s => s.trim());
-      const color = document.getElementById('colorPicker').value;
-
-      if (geojsonLayer) map.removeLayer(geojsonLayer);
-      if (outlineLayer) map.removeLayer(outlineLayer);
-
-      try {
-        const features = geojsonData.features.filter(feature => ids.includes(feature.properties.wikidata));
-        if (features.length === 0) {
-          showStatus('No features found with the provided IDs', 'error');
-          return;
-        }
-
-        geojsonLayer = L.geoJSON(features, {
-          style: { 
-            color: color, 
-            weight: 2, 
-            fillOpacity: 0.1,
-            fillColor: color
-          }
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.results.bindings.length > 0) {
+        const wkt = data.results.bindings[0].geo.value;
+        const geojson = Terraformer.WKT.parse(wkt);
+        L.geoJSON(geojson, {
+          style: { color: 'blue', weight: 2 }
         }).addTo(map);
-
-        if (geojsonLayer.getBounds().isValid()) {
-          map.fitBounds(geojsonLayer.getBounds());
-          showStatus(`Displayed ${features.length} local bodies`);
-        }
-      } catch (err) {
-        showStatus('Error drawing features: ' + err.message, 'error');
       }
     }
 
-    function drawOutline() {
-      if (!geojsonLayer) {
-        showStatus('Please draw local bodies first', 'error');
-        return;
-      }
-      const outlineColor = document.getElementById('outlineColorPicker').value;
-      if (outlineLayer) map.removeLayer(outlineLayer);
-
-      showStatus('Calculating outline...');
-
-      try {
-        // Collect selected polygons coordinates in proper format
-        const polygons = [];
-        geojsonLayer.eachLayer(layer => {
-          const geom = layer.feature.geometry;
-          if (geom.type === "Polygon") {
-            polygons.push(geom.coordinates);
-          } else if (geom.type === "MultiPolygon") {
-            geom.coordinates.forEach(poly => {
-              polygons.push(poly);
-            });
-          }
-        });
-
-        if (polygons.length === 0) {
-          showStatus('No polygons found to outline', 'error');
-          return;
-        }
-
-        // Start with first polygon
-        let merged = polygons[0];
-
-        // Union with remaining polygons
-        fo
+    // Example call: replace with actual local body QIDs
+    loadLocalBody("Q13112599"); // sample local body
+  </script>
+  <script src="https://unpkg.com/terraformer@1.0.12"></script>
+  <script src="https://unpkg.com/terraformer-wkt-parser@1.2.1"></script>
+</body>
+</html>
