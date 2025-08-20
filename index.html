@@ -3,102 +3,109 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Local Body Map v2.5</title>
+  <title>Local Body Map v2.6</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <style>
+    body { margin: 0; padding: 0; }
     #map { height: 90vh; width: 100%; }
-    #search-container {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: white;
+    #controls {
       padding: 10px;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-      z-index: 1000;
-      width: 220px;
+      background: #f8f8f8;
+      border-bottom: 1px solid #ccc;
     }
-    #search-bar {
-      width: 100%;
-      padding: 6px;
+    input[type="text"] { width: 400px; padding: 5px; }
+    input[type="color"] {
+      margin-left: 10px; padding: 0; border: none; width: 40px; height: 30px; cursor: pointer;
     }
-    #dropdown {
-      border: 1px solid #ccc;
-      border-top: none;
-      max-height: 120px;
-      overflow-y: auto;
-      display: none;
+    button { padding: 5px 10px; margin-left: 5px; }
+    #version {
+      position: absolute; top: 10px; right: 10px;
+      background: rgba(255,255,255,0.9); padding: 5px 10px;
+      border-radius: 5px; font-size: 12px; border: 1px solid #ccc;
+    }
+    #status {
+      padding: 5px 10px;
+      background: rgba(255,255,255,0.9);
+      border-radius: 5px;
       position: absolute;
-      background: white;
-      width: 220px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-    }
-    .dropdown-item {
-      padding: 6px;
-      cursor: pointer;
-    }
-    .dropdown-item:hover {
-      background: #eee;
-    }
-    #selected-message {
-      margin-top: 5px;
-      font-weight: bold;
-      text-align: center;
+      bottom: 20px;
+      left: 20px;
+      z-index: 1000;
     }
   </style>
 </head>
 <body>
-  <div id="map"></div>
-
-  <!-- Dummy Search Module (easily removable) -->
-  <div id="search-container">
-    <input type="text" id="search-bar" placeholder="Type a day (e.g. Mon)"/>
-    <div id="dropdown"></div>
-    <div id="selected-message"></div>
+  <div id="controls">
+    <input type="text" id="idInput" placeholder="Enter Wikidata IDs (comma separated)" />
+    <input type="color" id="colorPicker" value="#0000ff" title="Pick polygon color" />
+    <button onclick="drawSelected()">Draw</button>
   </div>
+  <div id="map"></div>
+  <div id="version">Version: v2.6</div>
+  <div id="status" style="display: none;"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    console.log("Local Body Map v2.5 loaded ✅");
+    console.log("Local Body Map v2.6 loaded ✅");
 
-    // Initialize map
-    const map = L.map('map').setView([10.0, 76.5], 8);
+    let map = L.map('map', { center: [10.2, 76.4], zoom: 8 });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // ---- Dummy Search Bar Module ----
-    (function DummySearchBarModule() {
-      const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-      const input = document.getElementById("search-bar");
-      const dropdown = document.getElementById("dropdown");
-      const message = document.getElementById("selected-message");
+    let geojsonData, geojsonLayer;
+    const defaultIDs = ["Q13112599","Q13113111","Q13113059","Q13110970","Q13110239","Q13111922","Q6958393","Q16909824"];
+    document.getElementById('idInput').value = defaultIDs.join(',');
 
-      input.addEventListener("input", () => {
-        const query = input.value.toLowerCase();
-        dropdown.innerHTML = "";
-        if (query.length === 0) { dropdown.style.display = "none"; return; }
-
-        const filtered = days.filter(d => d.toLowerCase().startsWith(query));
-        if (filtered.length === 0) { dropdown.style.display = "none"; return; }
-
-        filtered.forEach(day => {
-          const div = document.createElement("div");
-          div.className = "dropdown-item";
-          div.textContent = day;
-          div.onclick = () => {
-            input.value = day;
-            dropdown.style.display = "none";
-            message.textContent = "You have selected " + day;
-          };
-          dropdown.appendChild(div);
-        });
-        dropdown.style.display = "block";
+    // Load GeoJSON
+    fetch('local_bodies.geojson')
+      .then(res => res.json())
+      .then(data => {
+        geojsonData = data;
+        drawSelected();
+      })
+      .catch(err => {
+        showStatus('Error loading GeoJSON: ' + err.message, 'error');
       });
-    })();
-    // ---- End of Dummy Search Bar Module ----
 
+    function showStatus(message, type = 'info') {
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = message;
+      statusEl.style.display = 'block';
+      statusEl.style.backgroundColor = type === 'error' ? 'rgba(255,200,200,0.9)' : 'rgba(255,255,255,0.9)';
+      setTimeout(() => statusEl.style.display = 'none', 3000);
+    }
+
+    function drawSelected() {
+      const ids = document.getElementById('idInput').value.split(',').map(s => s.trim());
+      const color = document.getElementById('colorPicker').value;
+
+      if (geojsonLayer) map.removeLayer(geojsonLayer);
+
+      try {
+        const features = geojsonData.features.filter(feature => ids.includes(feature.properties.wikidata));
+        if (features.length === 0) {
+          showStatus('No features found with the provided IDs', 'error');
+          return;
+        }
+
+        geojsonLayer = L.geoJSON(features, {
+          style: { 
+            color: color, 
+            weight: 2, 
+            fillOpacity: 0.1,
+            fillColor: color
+          }
+        }).addTo(map);
+
+        if (geojsonLayer.getBounds().isValid()) {
+          map.fitBounds(geojsonLayer.getBounds());
+          showStatus(`Displayed ${features.length} local bodies`);
+        }
+      } catch (err) {
+        showStatus('Error drawing features: ' + err.message, 'error');
+      }
+    }
   </script>
 </body>
 </html>
