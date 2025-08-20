@@ -38,23 +38,20 @@
   <div id="controls">
     <input type="text" id="idInput" placeholder="Enter Wikidata IDs (comma separated)" />
     <input type="color" id="colorPicker" value="#0000ff" title="Pick polygon color" />
-    <input type="color" id="outlineColorPicker" value="#ff0000" title="Pick outline color" />
     <button onclick="drawSelected()">Draw</button>
-    <button onclick="drawOutline()">Draw Outline</button>
   </div>
   <div id="map"></div>
-  <div id="version">Version: v2.3</div>
+  <div id="version">Version: v2.4 (no outline)</div>
   <div id="status" style="display: none;"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/martinez-polygon-clipping/dist/martinez.min.js"></script>
   <script>
     let map = L.map('map', { center: [10.2, 76.4], zoom: 8 });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    let geojsonData, geojsonLayer, outlineLayer;
+    let geojsonData, geojsonLayer;
     const defaultIDs = ["Q13112599","Q13113111","Q13113059","Q13110970","Q13110239","Q13111922","Q6958393","Q16909824"];
     document.getElementById('idInput').value = defaultIDs.join(',');
 
@@ -82,7 +79,6 @@
       const color = document.getElementById('colorPicker').value;
 
       if (geojsonLayer) map.removeLayer(geojsonLayer);
-      if (outlineLayer) map.removeLayer(outlineLayer);
 
       try {
         const features = geojsonData.features.filter(feature => ids.includes(feature.properties.wikidata));
@@ -106,110 +102,6 @@
         }
       } catch (err) {
         showStatus('Error drawing features: ' + err.message, 'error');
-      }
-    }
-
-    function drawOutline() {
-      if (!geojsonLayer) {
-        showStatus('Please draw local bodies first', 'error');
-        return;
-      }
-      
-      const outlineColor = document.getElementById('outlineColorPicker').value;
-      if (outlineLayer) map.removeLayer(outlineLayer);
-
-      showStatus('Calculating outline...');
-      
-      try {
-        // Collect selected polygons coordinates in proper format
-        const polygons = [];
-        geojsonLayer.eachLayer(layer => {
-          const geom = layer.feature.geometry;
-          
-          if (geom.type === "Polygon") {
-            polygons.push(geom.coordinates);
-          } 
-          else if (geom.type === "MultiPolygon") {
-            // For MultiPolygon, add each polygon separately
-            geom.coordinates.forEach(poly => {
-              polygons.push(poly);
-            });
-          }
-        });
-
-        if (polygons.length === 0) {
-          showStatus('No polygons found to outline', 'error');
-          return;
-        }
-
-        // Start with first polygon
-        let merged = polygons[0];
-        
-        // Union with remaining polygons
-        for (let i = 1; i < polygons.length; i++) {
-          try {
-            merged = martinez.union(merged, polygons[i]);
-          } catch (e) {
-            console.error("Error merging polygons:", e);
-            continue;
-          }
-        }
-
-        // Handle the merged result (could be single polygon or multiple)
-        const mergedFeatures = [];
-        
-        // Check if we have a valid polygon structure
-        function isValidPolygon(coords) {
-          return Array.isArray(coords) && 
-                 coords.length > 0 && 
-                 Array.isArray(coords[0]) && 
-                 Array.isArray(coords[0][0]) && 
-                 coords[0][0].length >= 2;
-        }
-
-        if (isValidPolygon(merged)) {
-          // Single polygon case
-          mergedFeatures.push({
-            type: "Feature",
-            geometry: { type: "Polygon", coordinates: merged },
-            properties: {}
-          });
-        } else if (Array.isArray(merged)) {
-          // Multi-polygon case
-          merged.forEach(poly => {
-            if (isValidPolygon(poly)) {
-              mergedFeatures.push({
-                type: "Feature",
-                geometry: { type: "Polygon", coordinates: poly },
-                properties: {}
-              });
-            }
-          });
-        }
-
-        if (mergedFeatures.length === 0) {
-          showStatus('Could not create valid outline from selected polygons', 'error');
-          return;
-        }
-
-        // Create the outline layer
-        outlineLayer = L.geoJSON({ type: "FeatureCollection", features: mergedFeatures }, {
-          style: { 
-            color: outlineColor, 
-            weight: 3, 
-            fillOpacity: 0,
-            fillColor: outlineColor
-          }
-        }).addTo(map);
-
-        if (outlineLayer.getBounds().isValid()) {
-          map.fitBounds(outlineLayer.getBounds());
-          showStatus('Outline created successfully');
-        } else {
-          showStatus('Outline created but with invalid bounds', 'warning');
-        }
-      } catch (err) {
-        showStatus('Error creating outline: ' + err.message, 'error');
       }
     }
   </script>
