@@ -1,3 +1,4 @@
+<!-- README: Increment version number every time you update this file -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -12,10 +13,15 @@
     input[type="text"] { width: 400px; padding: 5px; }
     input[type="color"] { margin-left: 10px; padding: 0; border: none; width: 40px; height: 30px; cursor: pointer; }
     button { padding: 5px 10px; margin-left: 5px; }
-    #version { 
-      position: absolute; top: 10px; right: 10px;
-      background: rgba(255,255,255,0.9); padding: 5px 10px;
-      border-radius: 5px; font-size: 12px; border: 1px solid #ccc;
+    #version {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255,255,255,0.9);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      border: 1px solid #ccc;
     }
     #status {
       padding: 5px 10px;
@@ -36,20 +42,29 @@
     <button onclick="drawSelected()">Draw</button>
     <button onclick="drawOutline()">Draw Outline</button>
   </div>
+  
   <div id="map"></div>
   <div id="version">Version: v2.3</div>
   <div id="status" style="display: none;"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/martinez-polygon-clipping/dist/martinez.min.js"></script>
+
   <script>
     let map = L.map('map', { center: [10.2, 76.4], zoom: 8 });
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
     let geojsonData, geojsonLayer, outlineLayer;
-    const defaultIDs = ["Q13112599","Q13113111","Q13113059","Q13110970","Q13110239","Q13111922","Q6958393","Q16909824"];
+
+    const defaultIDs = [
+      "Q13112599","Q13113111","Q13113059","Q13110970",
+      "Q13110239","Q13111922","Q6958393","Q16909824"
+    ];
+
     document.getElementById('idInput').value = defaultIDs.join(',');
 
     // Load GeoJSON
@@ -67,7 +82,9 @@
       const statusEl = document.getElementById('status');
       statusEl.textContent = message;
       statusEl.style.display = 'block';
-      statusEl.style.backgroundColor = type === 'error' ? 'rgba(255,200,200,0.9)' : 'rgba(255,255,255,0.9)';
+      statusEl.style.backgroundColor = type === 'error'
+        ? 'rgba(255,200,200,0.9)'
+        : 'rgba(255,255,255,0.9)';
       setTimeout(() => statusEl.style.display = 'none', 3000);
     }
 
@@ -79,19 +96,17 @@
       if (outlineLayer) map.removeLayer(outlineLayer);
 
       try {
-        const features = geojsonData.features.filter(feature => ids.includes(feature.properties.wikidata));
+        const features = geojsonData.features.filter(
+          feature => ids.includes(feature.properties.wikidata)
+        );
+
         if (features.length === 0) {
           showStatus('No features found with the provided IDs', 'error');
           return;
         }
 
         geojsonLayer = L.geoJSON(features, {
-          style: { 
-            color: color, 
-            weight: 2, 
-            fillOpacity: 0.1,
-            fillColor: color
-          }
+          style: { color: color, weight: 2, fillOpacity: 0.1, fillColor: color }
         }).addTo(map);
 
         if (geojsonLayer.getBounds().isValid()) {
@@ -108,7 +123,9 @@
         showStatus('Please draw local bodies first', 'error');
         return;
       }
+
       const outlineColor = document.getElementById('outlineColorPicker').value;
+
       if (outlineLayer) map.removeLayer(outlineLayer);
 
       showStatus('Calculating outline...');
@@ -145,7 +162,6 @@
           }
         }
 
-        // Handle the merged result (could be single polygon or multiple)
         const mergedFeatures = [];
 
         function isValidPolygon(coords) {
@@ -179,17 +195,10 @@
           return;
         }
 
-        outlineLayer = L.geoJSON({
-          type: "FeatureCollection",
-          features: mergedFeatures
-        }, {
-          style: { 
-            color: outlineColor, 
-            weight: 3, 
-            fillOpacity: 0,
-            fillColor: outlineColor
-          }
-        }).addTo(map);
+        outlineLayer = L.geoJSON(
+          { type: "FeatureCollection", features: mergedFeatures },
+          { style: { color: outlineColor, weight: 3, fillOpacity: 0, fillColor: outlineColor } }
+        ).addTo(map);
 
         if (outlineLayer.getBounds().isValid()) {
           map.fitBounds(outlineLayer.getBounds());
