@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Local Body Map v2.6</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <title>Kerala Local Bodies Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <style>
     body { margin: 0; padding: 0; }
-    #map { height: 90vh; width: 100%; }
+    #map { width: 100%; height: 95vh; }
     #controls {
       padding: 10px;
       background: #f8f8f8;
@@ -41,13 +41,11 @@
     <button onclick="drawSelected()">Draw</button>
   </div>
   <div id="map"></div>
-  <div id="version">Version: v2.6</div>
+  <div id="version">Version: v2.4 (no outline)</div>
   <div id="status" style="display: none;"></div>
 
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
-    console.log("Local Body Map v2.6 loaded ✅");
-
     let map = L.map('map', { center: [10.2, 76.4], zoom: 8 });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
@@ -109,3 +107,6 @@
   </script>
 </body>
 </html>
+
+
+
